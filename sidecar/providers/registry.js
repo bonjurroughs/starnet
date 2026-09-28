@@ -547,6 +547,30 @@
       order: 60
     },
     {
+      // Claude via the user's OWN `claude` CLI login (a claude.ai subscription — no API key). The adapter drives
+      // `claude -p` as a pure model with StarNet's tools advertised over a catalog-only MCP server; StarNet still
+      // executes every tool through its own consent path. See providers/claude-cli.js.
+      id: 'claudecode',
+      aliases: ['claude-code', 'claude-cli', 'claude-login'],
+      name: 'Claude (your Claude login)',
+      label: 'CLAUDE LOGIN',
+      endpoint: 'local claude CLI',
+      blurb: 'your Claude subscription via Claude Code — no API key',
+      live: true,
+      adapter: 'claude-cli',
+      apiMode: 'claude_cli',
+      authType: 'none',
+      keyRequired: false,
+      modelsRequireAuth: false,
+      baseUrl: '',
+      defaultReasoningEffort: 'medium',
+      unmetered: true,
+      credentialPool: false,
+      supportsTools: true,
+      supportsReasoning: false,
+      order: 36
+    },
+    {
       id: 'custom',
       aliases: ['openai-compatible', 'local', 'vllm', 'lmstudio'],
       name: 'Custom OpenAI-Compatible',

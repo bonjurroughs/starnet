@@ -178,5 +178,11 @@
   "overrides": {
     "adm-zip": "0.6.1",
     "sharp": "0.35.4"
+  },
+  "allowScripts": {
+    "onnxruntime-node@1.21.0": true,
+    "onnxruntime-node@1.24.3": true,
+    "node-pty@1.1.0": true,
+    "protobufjs@7.6.5": true
   }
 }

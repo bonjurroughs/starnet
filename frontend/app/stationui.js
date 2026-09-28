@@ -4125,6 +4125,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
     { id: 'perplexity',    name: 'PERPLEXITY',        endpoint: 'api.perplexity.ai',          blurb: 'Sonar API', live: true },
     { id: 'cerebras',      name: 'CEREBRAS',          endpoint: 'api.cerebras.ai/v1',         blurb: 'Cerebras API', live: true },
     { id: 'ollama',        name: 'OLLAMA',            endpoint: '127.0.0.1:11434/v1',         blurb: 'local models', live: true },
+    { id: 'claudecode',    name: 'CLAUDE LOGIN',      endpoint: 'local claude CLI',           blurb: 'your Claude subscription · no key', live: true },
     { id: 'custom',        name: 'CUSTOM',            endpoint: 'any /v1 base URL',           blurb: 'bring your endpoint', live: true }
   ];
   const H = () => (typeof Harness === 'object' && Harness) ? Harness : null;
@@ -4373,7 +4374,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
   function keysFor(id) { return connectedKeys().filter(x => x.provider === id); }
   function providerAcceptsKey(provider) {
     provider = provider || activeProv();
-    return !isOAuthProvider(provider) && provider !== 'ollama';
+    return !isOAuthProvider(provider) && provider !== 'ollama' && provider !== 'claudecode';
   }
   function addKeyHtml(provider, empty) {
     provider = provider || 'openrouter';
@@ -4388,7 +4389,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
   }
 
   function providerLogoHtml(id) {
-    const asset = id === 'starnet' ? 'starnet-wordmark.svg' : 'providers/' + (id === 'codex' ? 'openai' : id) + '.svg';
+    const asset = id === 'starnet' ? 'starnet-wordmark.svg' : 'providers/' + (id === 'codex' ? 'openai' : id === 'claudecode' ? 'anthropic' : id) + '.svg';
     return '<span class="prov-logo' + (id === 'starnet' ? ' prov-logo-starnet' : '') + '" aria-hidden="true" style="--provider-icon:url(&quot;' + esc(new URL('assets/brand/' + asset, document.baseURI).href) + '&quot;)"></span>';
   }
 

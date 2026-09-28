@@ -243,6 +243,7 @@ test/threadstore.test.js
 test/autopilot-threads.test.js
 test/autopilot-focus.test.js
 test/apiauth.test.js
+test/claude-cli-provider.test.js
 test/apitickets.test.js
 test/notebook.test.js
 test/skills.test.js

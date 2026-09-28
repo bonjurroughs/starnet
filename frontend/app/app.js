@@ -814,6 +814,7 @@ const App = (() => {
       cerebras: 'CEREBRAS',
       starnet: 'STARNET MANAGED',
       ollama: 'OLLAMA',
+      claudecode: 'CLAUDE LOGIN',
       custom: 'CUSTOM'
     };
     return map[provider] || String(provider || 'openrouter').toUpperCase();
@@ -838,17 +839,18 @@ const App = (() => {
     if (p === 'cerebras') return 'cerebras';
     // managed credits — its bearer is the linked device token, never a key the user pastes
     if (p === 'starnet' || p === 'starnet-cloud' || p === 'managed') return 'starnet';
+    if (p === 'claudecode' || p === 'claude-code' || p === 'claude-cli' || p === 'claude-login') return 'claudecode';   // the local claude CLI login (subscription, no key)
     if (p === 'ollama' || p === 'ollama-local') return 'ollama';
     if (p === 'custom' || p === 'openai-compatible' || p === 'local' || p === 'vllm' || p === 'lmstudio') return 'custom';
     return 'openrouter';
   }
   function providerNeedsKey(provider) {
     const p = normalizeProviderId(provider);
-    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'custom' && p !== 'starnet';
+    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'custom' && p !== 'starnet' && p !== 'claudecode';
   }
   function providerUsesKeyBox(provider) {
     const p = normalizeProviderId(provider);
-    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'starnet';
+    return p !== 'codex' && p !== 'grok' && p !== 'kimi' && p !== 'ollama' && p !== 'starnet' && p !== 'claudecode';
   }
   function providerNeedsBaseUrl(provider) {
     return normalizeProviderId(provider) === 'custom';
@@ -1588,6 +1590,7 @@ const App = (() => {
     perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
     cerebras: ['llama-4-scout-17b-16e-instruct', 'llama3.1-8b', 'qwen-3-coder-480b'],
     ollama: ['llama3.1', 'qwen2.5-coder', 'mistral'],
+    claudecode: ['sonnet', 'opus', 'haiku'],
     openrouter: ['gpt-5.5', 'anthropic/claude-sonnet-4.6', 'anthropic/claude-opus-4.8', 'openai/gpt-5', 'google/gemini-2.5-pro']
   });
   // The genesis model catalog for the ACTIVE provider — {id, name, pricing, context_length, fallback?} items
@@ -1646,6 +1649,11 @@ const App = (() => {
      curated FALLBACK list loadModels() already ships, so nothing new is fabricated. Codex hides them —
      its menu is discovered live per-account (loadCodexModels), so a static list there could mislead. */
   const MODEL_PICKS = Object.freeze({
+    claudecode: [
+      { label: 'Sonnet', id: 'sonnet', tag: 'balanced' },
+      { label: 'Opus', id: 'opus', tag: 'deepest' },
+      { label: 'Haiku', id: 'haiku', tag: 'fastest' }
+    ],
     openrouter: [
       { label: 'Opus 4.8', id: 'anthropic/claude-opus-4.8', tag: 'deepest' },
       { label: 'Sonnet 4.6', id: 'anthropic/claude-sonnet-4.6', tag: 'balanced' },
@@ -2002,7 +2010,7 @@ const App = (() => {
     // the BYOK note talks about your key on 127.0.0.1 / the OS keychain — irrelevant and contradictory on the
     // keyless subscription paths (no key at all), so hide the whole disclosure there. On BYOK it stays collapsed
     // behind its toggle (progressive disclosure) — the note's own .hidden is owned by #byok-toggle, not this switch.
-    { const bd = el('byok-disclose'); if (bd) bd.classList.toggle('hidden', isOAuth || isStarnet || isOllama); }   // ollama: no key exists to ask about
+    { const bd = el('byok-disclose'); if (bd) bd.classList.toggle('hidden', isOAuth || isStarnet || isOllama || pickedProvider === 'claudecode'); }   // ollama: no key exists to ask about
     // Switching providers must drop any OTHER provider's in-flight device-code poll — a code minted for the
     // previous pick has no business connecting the new one's block. The active pick's own poll survives a re-click.
     cancelOAuthPolls(isOpenAI ? 'codex' : pickedProvider);   // the OPENAI card's sign-in IS the codex poll — keep it alive
