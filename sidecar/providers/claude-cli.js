@@ -335,5 +335,16 @@ function makeClaudeCliProvider(opts) {
   return { stream, listModels, contextLimit, priceOf, supportsTools, reasoningEfforts };
 }
 
-module.exports = { makeClaudeCliProvider, STATIC_MODELS, DEFAULT_MODEL,
+// The Claude subscription is capped (5-hour / weekly windows). When it is the primary, no fallback chain is
+// configured, and a metered Anthropic key is on file, return the single { provider, model } entry that lets a
+// cap exhaustion (err.code 'usage_limit_reached' -> errorClass 'quota_exhausted') fail over instead of
+// stalling. Returns [] otherwise. claudecode model ids are aliases; map them to Anthropic's real ids and pass
+// anything already exact through unchanged.
+const CLAUDECODE_MODEL_TO_ANTHROPIC = { sonnet: 'claude-sonnet-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-4-5-20251001' };
+function autoAnthropicFallback({ providerId, model, hasExplicitChain, hasAnthropicKey }) {
+  if (providerId !== 'claudecode' || hasExplicitChain || !hasAnthropicKey) return [];
+  return [{ provider: 'anthropic', model: CLAUDECODE_MODEL_TO_ANTHROPIC[model] || model }];
+}
+
+module.exports = { makeClaudeCliProvider, STATIC_MODELS, DEFAULT_MODEL, autoAnthropicFallback,
   _internals: { buildToolMap, renderTranscript, splitSystem, normalizeUsage, buildArgs, textFromContent, MCP_PREFIX } };

@@ -17500,20 +17500,12 @@ async function runOnceCore(o) {
     .map(s => String(s || '').trim()).filter(Boolean);
   const savedProviderFallbacks = !Array.isArray(o.fallbackModels) && fallbackSaved != null && providerId !== 'openrouter' && providerId !== 'starnet'
     ? fallbackModels.splice(0).map(m => ({ provider: 'openrouter', model: m })) : [];
-  // PHASE 3: the Claude subscription (claudecode) bills flat-rate but is capped (5-hour/weekly windows,
-  // per `claude`'s own rate_limit_event telemetry). When it's the primary and no explicit fallback chain
-  // is already configured, auto-fall back to the metered Anthropic API key — if one is on file — on cap
-  // exhaustion. providers/claude-cli.js throws err.code='usage_limit_reached' on that condition, which
-  // errorClass.js already classifies as quota_exhausted (shouldFallback:true) — the same seam Codex's
-  // weekly-quota exhaustion already uses. Model ids are aliases on claudecode (sonnet/opus/haiku); map to
-  // Anthropic's real ids so the fallback call is valid, passing through anything already exact.
-  const CLAUDECODE_MODEL_TO_ANTHROPIC = { sonnet: 'claude-sonnet-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-4-5-20251001' };
-  const autoClaudeCodeFallback = (providerId === 'claudecode' && !savedProviderFallbacks.length && !(Array.isArray(o.fallbackProviders) && o.fallbackProviders.length))
-    ? (() => {
-        const anthKey = providerRuntimeKey('anthropic', '');
-        if (!providerHasCredential('anthropic', anthKey, '')) return [];
-        return [{ provider: 'anthropic', model: CLAUDECODE_MODEL_TO_ANTHROPIC[model] || model }];
-      })()
+  // The Claude subscription (claudecode) is capped; when it is primary, no fallback chain is configured, and an
+  // Anthropic key is on file, fail over to it on cap exhaustion (usage_limit_reached -> quota_exhausted).
+  const hasExplicitChain = savedProviderFallbacks.length > 0 || (Array.isArray(o.fallbackProviders) && o.fallbackProviders.length > 0);
+  const autoClaudeCodeFallback = (providerId === 'claudecode' && !hasExplicitChain)
+    ? require('./providers/claude-cli.js').autoAnthropicFallback({ providerId, model, hasExplicitChain,
+        hasAnthropicKey: providerHasCredential('anthropic', providerRuntimeKey('anthropic', ''), '') })
     : [];
   for (let i = fallbackModels.length - 1; i >= 0; i--) if (fallbackModels[i] === model) fallbackModels.splice(i, 1);
   // COMPETENCE PREFLIGHT: an explicitly configured fallback chain is already the Commander's authority to use

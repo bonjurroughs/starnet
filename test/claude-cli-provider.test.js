@@ -142,5 +142,15 @@ const TOOLS = [{ type: 'function', function: { name: 'fs.read', description: 're
   threw = null; try { await missing.listModels(); } catch (e) { threw = e; }
   A.ok(threw && /not found/.test(threw.message), 'missing CLI -> honest error');
 
+  // ---- usage-cap auto-fallback to a metered Anthropic key (opt-out by configuring any fallback chain) ----
+  const fb = o => P.autoAnthropicFallback(Object.assign({ providerId: 'claudecode', model: 'sonnet', hasExplicitChain: false, hasAnthropicKey: true }, o));
+  A.eq(fb({}), [{ provider: 'anthropic', model: 'claude-sonnet-5' }], 'claudecode + key on file -> one anthropic fallback');
+  A.eq(fb({ model: 'opus' })[0].model, 'claude-opus-5-5', 'opus alias maps to its real id');
+  A.eq(fb({ model: 'haiku' })[0].model, 'claude-haiku-4-5-20251001', 'haiku alias maps to its real id');
+  A.eq(fb({ model: 'claude-sonnet-4-5' })[0].model, 'claude-sonnet-4-5', 'an exact id passes through unchanged');
+  A.eq(fb({ hasAnthropicKey: false }), [], 'no Anthropic key on file -> no fallback');
+  A.eq(fb({ hasExplicitChain: true }), [], 'an explicit fallback chain is never overridden');
+  A.eq(fb({ providerId: 'anthropic' }), [], 'only claudecode as primary gets the auto-fallback');
+
   A.report('claude-cli-provider.test');
 })().catch(e => { console.error(e); process.exit(1); });
