@@ -4461,6 +4461,12 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
             '<button class="bb sm" id="prov-oauth-open-' + esc(p.id) + '" hidden>↗ OPEN PAGE</button>' +
             '</div>'
           : '') +
+        (p.id === 'claudecode'
+          ? '<label class="set-row cc-capfb" title="Off by default. Your Claude subscription has usage caps; this lets a run that hits the cap continue on your own Anthropic API key, which bills per token.">' +
+            '<input type="checkbox" id="cc-capfb-on" data-act="cc-capfb" disabled> ' +
+            '<span>if my Claude usage cap is hit, continue on my Anthropic API key <i class="dim">(metered — costs money; needs an Anthropic key saved)</i></span>' +
+            '</label>'
+          : '') +
         '</div>';
     }).join('');
   }
@@ -4959,6 +4965,22 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
           }
         });
       });
+      // OPT-IN (default OFF): continue a capped Claude subscription run on a metered Anthropic key. Server-persisted.
+      const capFb = card.querySelector('#cc-capfb-on');
+      if (capFb) {
+        capFb.addEventListener('click', ev => ev.stopPropagation());
+        Harness.api.get('/api/claudecode/cap-fallback').then(j => { capFb.checked = !!(j && j.enabled); capFb.disabled = false; }).catch(() => {});
+        capFb.addEventListener('change', () => {
+          const want = capFb.checked;
+          capFb.disabled = true;
+          Harness.api.post('/api/claudecode/cap-fallback', { enabled: want }).then(({ ok, j }) => {
+            if (!ok) throw new Error((j && j.error) || 'could not save');
+            capFb.checked = !!j.enabled; capFb.disabled = false;
+            notify(j.enabled ? 'on a Claude usage-cap hit, runs continue on your Anthropic API key (metered)' : 'usage-cap fallback off — a cap hit stops the run', j.enabled ? 'warn' : 'good');
+            sfx('click');
+          }).catch(() => { capFb.checked = !want; capFb.disabled = false; notify('could not save the usage-cap setting', 'bad'); sfx('bad'); });
+        });
+      }
       // clicks on the inline key controls must NOT bubble up to provider-select — they toggle/save the key row.
       const inlineToggle = card.querySelector('[data-act="prov-add-toggle"]');
       const inlineSave = card.querySelector('[data-act="prov-add-save"]');

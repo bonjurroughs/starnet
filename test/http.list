@@ -151,6 +151,7 @@ test/toolsearch.connectors-deferred.test.js
 test/effective-toolsets.availability.test.js
 test/payload.budget.test.js
 test/prompt-on-demand.e2e.test.js
+test/claudecode-cap-fallback.http.test.js
 test/byok-linked-credit.e2e.test.js
 test/workflow-project.e2e.test.js
 test/workflow-project-multibay.e2e.test.js

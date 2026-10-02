@@ -1171,6 +1171,10 @@ function saveFallbackChain() {
 // the fallback chain actually in force for a run that DOESN'T carry its own per-run list = saved-or-env.
 function effectiveFallbackChain() { return fallbackChain.resolveChain(ENV_FALLBACK, fallbackSaved); }
 fallbackSaved = loadFallbackChain();
+// Opt-in (default OFF): when the capped Claude subscription (claudecode) is the primary, fail over to a metered
+// Anthropic key already on file. Spending money without asking is never the default.
+const CLAUDECODE_CAP_FALLBACK_FILE = path.join(WORKSPACES, 'claudecode-fallback.json');
+let claudeCodeCapFallback = (() => { try { const v = loadResilient(CLAUDECODE_CAP_FALLBACK_FILE, 'claudecode cap fallback'); return !!(v && v.enabled === true); } catch (_) { return false; } })();
 
 // admission gate: bounds how many distinct agents run paid loops concurrently (multi-agent fan-out guard).
 const concurrencyGate = makeConcurrencyGate({ max: MAX_CONCURRENT_AGENTS });
@@ -9766,6 +9770,8 @@ const ROUTES = [
   { m: 'POST', exact: '/api/budget/resume', h: handleBudgetResume },
   { m: 'GET', exact: '/api/fallback/chain', h: handleFallbackStatus },
   { m: 'POST', exact: '/api/fallback/chain', h: handleFallbackChain },
+  { m: 'GET', exact: '/api/claudecode/cap-fallback', h: handleClaudeCodeCapFallback },
+  { m: 'POST', exact: '/api/claudecode/cap-fallback', h: handleClaudeCodeCapFallback },
   { m: 'POST', exact: '/api/config/export', h: handleConfigExport },   // P1-7 station backup
   { m: 'POST', exact: '/api/config/import', h: handleConfigImport },
   { m: 'POST', exact: '/api/config/reset', h: handleConfigReset },
@@ -11405,6 +11411,19 @@ async function handleFallbackChain(req, res) {
     chain: effectiveFallbackChain(), saved: fallbackSaved != null, envDefault: ENV_FALLBACK.slice(),
     maxEntries: fallbackChain.MAX_ENTRIES, warnings: v.warnings || []
   }));
+}
+
+/* ---- GET/POST /api/claudecode/cap-fallback { enabled: boolean } — the opt-in (default OFF) that lets a Claude
+   subscription cap hit fail over to a metered Anthropic key already on file. Persisted durably (+ .bak), applied live. ---- */
+async function handleClaudeCodeCapFallback(req, res) {
+  const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+  if (req.method === 'POST') {
+    let body; try { body = JSON.parse(await readBody(req, 1024)) || {}; } catch (e) { return json(400, { error: 'bad json' }); }
+    if (typeof body.enabled !== 'boolean') return json(400, { error: 'enabled must be true or false' });
+    claudeCodeCapFallback = body.enabled;
+    saveResilient(CLAUDECODE_CAP_FALLBACK_FILE, { enabled: claudeCodeCapFallback });
+  }
+  return json(200, { enabled: claudeCodeCapFallback === true });
 }
 
 /* ---- P1-7 STATION BACKUP: export / import / reset the station's persisted config to ONE portable JSON file.
@@ -17500,11 +17519,12 @@ async function runOnceCore(o) {
     .map(s => String(s || '').trim()).filter(Boolean);
   const savedProviderFallbacks = !Array.isArray(o.fallbackModels) && fallbackSaved != null && providerId !== 'openrouter' && providerId !== 'starnet'
     ? fallbackModels.splice(0).map(m => ({ provider: 'openrouter', model: m })) : [];
-  // The Claude subscription (claudecode) is capped; when it is primary, no fallback chain is configured, and an
-  // Anthropic key is on file, fail over to it on cap exhaustion (usage_limit_reached -> quota_exhausted).
+  // Opt-in (Settings -> Providers -> CLAUDE): the Claude subscription (claudecode) is capped; when it is primary, no
+  // fallback chain is configured, and an Anthropic key is on file, fail over to it on cap exhaustion
+  // (usage_limit_reached -> quota_exhausted).
   const hasExplicitChain = savedProviderFallbacks.length > 0 || (Array.isArray(o.fallbackProviders) && o.fallbackProviders.length > 0);
-  const autoClaudeCodeFallback = (providerId === 'claudecode' && !hasExplicitChain)
-    ? require('./providers/claude-cli.js').autoAnthropicFallback({ providerId, model, hasExplicitChain,
+  const autoClaudeCodeFallback = (claudeCodeCapFallback && providerId === 'claudecode' && !hasExplicitChain)
+    ? require('./providers/claude-cli.js').autoAnthropicFallback({ enabled: claudeCodeCapFallback, providerId, model, hasExplicitChain,
         hasAnthropicKey: providerHasCredential('anthropic', providerRuntimeKey('anthropic', ''), '') })
     : [];
   for (let i = fallbackModels.length - 1; i >= 0; i--) if (fallbackModels[i] === model) fallbackModels.splice(i, 1);

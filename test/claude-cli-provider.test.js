@@ -142,15 +142,27 @@ const TOOLS = [{ type: 'function', function: { name: 'fs.read', description: 're
   threw = null; try { await missing.listModels(); } catch (e) { threw = e; }
   A.ok(threw && /not found/.test(threw.message), 'missing CLI -> honest error');
 
-  // ---- usage-cap auto-fallback to a metered Anthropic key (opt-out by configuring any fallback chain) ----
-  const fb = o => P.autoAnthropicFallback(Object.assign({ providerId: 'claudecode', model: 'sonnet', hasExplicitChain: false, hasAnthropicKey: true }, o));
-  A.eq(fb({}), [{ provider: 'anthropic', model: 'claude-sonnet-5' }], 'claudecode + key on file -> one anthropic fallback');
+  // ---- usage-cap fallback to a metered Anthropic key: OPT-IN (default off), and never overrides a configured chain ----
+  const fb = o => P.autoAnthropicFallback(Object.assign({ enabled: true, providerId: 'claudecode', model: 'sonnet', hasExplicitChain: false, hasAnthropicKey: true }, o));
+  A.eq(fb({ enabled: false }), [], 'toggle OFF -> never a fallback, even with a key on file');
+  A.eq(fb({ enabled: undefined }), [], 'toggle never set -> off (default)');
+  A.eq(fb({ enabled: 'true' }), [], 'only a real boolean true enables it');
+  A.eq(fb({}), [{ provider: 'anthropic', model: 'claude-sonnet-5' }], 'toggle ON + claudecode + key on file -> one anthropic fallback');
   A.eq(fb({ model: 'opus' })[0].model, 'claude-opus-5-5', 'opus alias maps to its real id');
   A.eq(fb({ model: 'haiku' })[0].model, 'claude-haiku-4-5-20251001', 'haiku alias maps to its real id');
   A.eq(fb({ model: 'claude-sonnet-4-5' })[0].model, 'claude-sonnet-4-5', 'an exact id passes through unchanged');
   A.eq(fb({ hasAnthropicKey: false }), [], 'no Anthropic key on file -> no fallback');
   A.eq(fb({ hasExplicitChain: true }), [], 'an explicit fallback chain is never overridden');
   A.eq(fb({ providerId: 'anthropic' }), [], 'only claudecode as primary gets the auto-fallback');
+
+  const root = require('node:path').join(__dirname, '..');
+  const idx = fs.readFileSync(require('node:path').join(root, 'sidecar', 'index.js'), 'utf8');
+  const ui = fs.readFileSync(require('node:path').join(root, 'frontend', 'app', 'stationui.js'), 'utf8');
+  A.ok(idx.includes("m: 'GET', exact: '/api/claudecode/cap-fallback', h: handleClaudeCodeCapFallback") && idx.includes("m: 'POST', exact: '/api/claudecode/cap-fallback', h: handleClaudeCodeCapFallback"), 'cap-fallback route is registered (GET + POST)');
+  A.ok(/let claudeCodeCapFallback = .*enabled === true/.test(idx), 'server state defaults to OFF unless a saved file says enabled:true');
+  A.ok(/enabled: claudeCodeCapFallback, providerId/.test(idx), 'runOnceCore passes the toggle into the fallback decision');
+  const box = (ui.match(/<input type="checkbox" id="cc-capfb-on"[^>]*>/) || [''])[0];
+  A.ok(box && !/ checked/.test(box), 'the CLAUDE card checkbox renders unchecked until the server says otherwise');
 
   A.report('claude-cli-provider.test');
 })().catch(e => { console.error(e); process.exit(1); });
