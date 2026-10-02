@@ -4125,6 +4125,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
     { id: 'perplexity',    name: 'PERPLEXITY',        endpoint: 'api.perplexity.ai',          blurb: 'Sonar API', live: true },
     { id: 'cerebras',      name: 'CEREBRAS',          endpoint: 'api.cerebras.ai/v1',         blurb: 'Cerebras API', live: true },
     { id: 'ollama',        name: 'OLLAMA',            endpoint: '127.0.0.1:11434/v1',         blurb: 'local models', live: true },
+    { id: 'claudecode',    name: 'CLAUDE LOGIN',      endpoint: 'local claude CLI',           blurb: 'your Claude subscription · no key', live: true },
     { id: 'custom',        name: 'CUSTOM',            endpoint: 'any /v1 base URL',           blurb: 'bring your endpoint', live: true }
   ];
   const H = () => (typeof Harness === 'object' && Harness) ? Harness : null;
@@ -4373,7 +4374,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
   function keysFor(id) { return connectedKeys().filter(x => x.provider === id); }
   function providerAcceptsKey(provider) {
     provider = provider || activeProv();
-    return !isOAuthProvider(provider) && provider !== 'ollama';
+    return !isOAuthProvider(provider) && provider !== 'ollama' && provider !== 'claudecode';
   }
   function addKeyHtml(provider, empty) {
     provider = provider || 'openrouter';
@@ -4388,7 +4389,7 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
   }
 
   function providerLogoHtml(id) {
-    const asset = id === 'starnet' ? 'starnet-wordmark.svg' : 'providers/' + (id === 'codex' ? 'openai' : id) + '.svg';
+    const asset = id === 'starnet' ? 'starnet-wordmark.svg' : 'providers/' + (id === 'codex' ? 'openai' : id === 'claudecode' ? 'anthropic' : id) + '.svg';
     return '<span class="prov-logo' + (id === 'starnet' ? ' prov-logo-starnet' : '') + '" aria-hidden="true" style="--provider-icon:url(&quot;' + esc(new URL('assets/brand/' + asset, document.baseURI).href) + '&quot;)"></span>';
   }
 
@@ -4459,6 +4460,12 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
             '<code class="key-mask" id="prov-oauth-code-' + esc(p.id) + '" hidden></code>' +
             '<button class="bb sm" id="prov-oauth-open-' + esc(p.id) + '" hidden>↗ OPEN PAGE</button>' +
             '</div>'
+          : '') +
+        (p.id === 'claudecode'
+          ? '<label class="set-row cc-capfb" title="Off by default. Your Claude subscription has usage caps; this lets a run that hits the cap continue on your own Anthropic API key, which bills per token.">' +
+            '<input type="checkbox" id="cc-capfb-on" data-act="cc-capfb" disabled> ' +
+            '<span>if my Claude usage cap is hit, continue on my Anthropic API key <i class="dim">(metered — costs money; needs an Anthropic key saved)</i></span>' +
+            '</label>'
           : '') +
         '</div>';
     }).join('');
@@ -4958,6 +4965,22 @@ const StationUI = typeof document === 'undefined' ? {} : (() => {
           }
         });
       });
+      // OPT-IN (default OFF): continue a capped Claude subscription run on a metered Anthropic key. Server-persisted.
+      const capFb = card.querySelector('#cc-capfb-on');
+      if (capFb) {
+        capFb.addEventListener('click', ev => ev.stopPropagation());
+        Harness.api.get('/api/claudecode/cap-fallback').then(j => { capFb.checked = !!(j && j.enabled); capFb.disabled = false; }).catch(() => {});
+        capFb.addEventListener('change', () => {
+          const want = capFb.checked;
+          capFb.disabled = true;
+          Harness.api.post('/api/claudecode/cap-fallback', { enabled: want }).then(({ ok, j }) => {
+            if (!ok) throw new Error((j && j.error) || 'could not save');
+            capFb.checked = !!j.enabled; capFb.disabled = false;
+            notify(j.enabled ? 'on a Claude usage-cap hit, runs continue on your Anthropic API key (metered)' : 'usage-cap fallback off — a cap hit stops the run', j.enabled ? 'warn' : 'good');
+            sfx('click');
+          }).catch(() => { capFb.checked = !want; capFb.disabled = false; notify('could not save the usage-cap setting', 'bad'); sfx('bad'); });
+        });
+      }
       // clicks on the inline key controls must NOT bubble up to provider-select — they toggle/save the key row.
       const inlineToggle = card.querySelector('[data-act="prov-add-toggle"]');
       const inlineSave = card.querySelector('[data-act="prov-add-save"]');
